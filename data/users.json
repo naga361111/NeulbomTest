@@ -1,0 +1,10 @@
+[
+    {
+        "email": "admin@bridge.com",
+        "password": "admin1234",
+        "name": "장동연",
+        "school": "강원대학교",
+        "userType": "학부생",
+        "initial": "장"
+    }
+]
