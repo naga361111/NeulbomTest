@@ -23,6 +23,9 @@ jobs:
           };
           EOF
 
+      - name: Prepare index.html for GitHub Pages
+        run: cp main.html index.html
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
