@@ -1,0 +1,14 @@
+# Ignore environment variables configuration
+env.js
+
+# Node modules
+node_modules/
+
+# Python Virtual Environment
+venv/
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store
+Thumbs.db

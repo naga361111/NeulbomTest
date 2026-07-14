@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>에듀-브릿지 | 춘천형 늘봄학교 매칭 플랫폼</title>
+
+    <!-- 폰트 및 아이콘 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- 환경변수 및 모듈 -->
+    <script src="./env.js"></script>
+    <script>
+        document.write('<scr' + 'ipt src="https://apis.openapi.sk.com/tmap/jsv2?version=1&appKey=' + window.ENV.TMAP_APP_KEY + '"></scr' + 'ipt>');
+    </script>
+    <script type="module" src="./managers/tmap_manager.js"></script>
+    <script type="module" src="./data/data_types.js"></script>
+    <script type="module" src="./data/mock_schedules.js"></script>
+    <script type="module" src="./data/default_users.js"></script>
+    <script type="module" src="./managers/auth_manager.js"></script>
+    <script type="module" src="./managers/tmap_cache_manager.js"></script>
+    <script type="module" src="./data/neulbom_requests.js"></script>
+    <script type="module" src="./managers/match_manager.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Noto Sans KR"', 'sans-serif'] },
+                    colors: {
+                        slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 800: '#1e293b', 900: '#0f172a' },
+                        brand: {
+                            DEFAULT: '#ADFF2F', // 밝은 연두색 포인트
+                            dark: '#9add26',    // 호버용
+                            light: '#d4ff80'    // 연한 배경용
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .map-bg {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .pulse-dot {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: .5;
+                transform: scale(1.5);
+            }
+        }
+
+        /* 뷰 전환 애니메이션 부드럽게 */
+        .page-view {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 파일 업로드 드래그 앤 드롭 영역 효과 */
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: #ADFF2F;
+            background-color: rgba(173, 255, 47, 0.05);
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 h-screen overflow-hidden flex selection:bg-brand selection:text-slate-900">
+
+    <!-- 사이드바 네비게이션 -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col justify-between hidden md:flex z-20">
+        <div>
+            <!-- 로고 영역 -->
+            <div class="h-20 flex items-center px-6 border-b border-slate-100 cursor-pointer"
+                onclick="navigate('home')">
+                <i class="fa-solid fa-bridge text-[#9add26] text-2xl mr-3"></i>
+                <h1 class="text-slate-900 text-xl font-bold tracking-tight">에듀-브릿지</h1>
+            </div>
+            <!-- 메뉴 (SPA 라우팅 연동) -->
+            <nav class="p-4 space-y-2">
+                <button id="nav-home" onclick="navigate('home')"
+                    class="nav-item w-full flex items-center gap-3 px-4 py-3 bg-brand/20 text-slate-900 rounded-lg font-bold border border-brand/40 transition-colors">
+                    <i class="fa-solid fa-house w-5 text-[#9add26]"></i> 홈 (메인)
+                </button>
+                <button id="nav-upload" onclick="navigate('upload')"
+                    class="nav-item w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors font-medium border border-transparent">
+                    <i class="fa-solid fa-calendar-plus w-5"></i> 공강 시간표 등록
+                </button>
+                <button id="nav-dashboard" onclick="navigate('dashboard')"
+                    class="nav-item w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors font-medium border border-transparent">
+                    <i class="fa-solid fa-chart-pie w-5"></i> 실시간 관제 센터
+                </button>
+                <!-- 새로 추가되는 선생님용 탭 -->
+                <button id="nav-demand-register" onclick="navigate('demand-register')"
+                    style="display: none;"
+                    class="nav-item w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors font-medium border border-transparent">
+                    <i class="fa-solid fa-file-circle-plus w-5"></i> 늘봄 긴급 수요 등록
+                </button>
+            </nav>
+        </div>
+
+        <!-- 하단 유저 정보 -->
+        <div class="p-4 border-t border-slate-100 bg-white">
+            <div id="user-info-btn" onclick="openLoginModal()"
+                class="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-100 rounded-lg cursor-pointer hover:bg-white hover:border-[#9add26]/50 hover:shadow-sm transition-all group">
+                <div id="user-avatar"
+                    class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold group-hover:bg-[#9add26] group-hover:text-slate-900 transition-colors">
+                    <i class="fa-solid fa-user text-sm"></i>
+                </div>
+                <div>
+                    <p id="user-name" class="text-sm text-slate-500 font-bold">비로그인 상태</p>
+                    <p id="user-role" class="text-xs text-slate-400">클릭하여 로그인</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-slate-50">
+
+        <!-- 뷰 1: 홈 화면 -->
+        <div id="view-home"
+            class="page-view flex-1 overflow-y-auto p-10 flex flex-col items-center justify-center text-center">
+            <div class="max-w-3xl w-full">
+                <div class="inline-flex items-center justify-center p-4 bg-brand/20 rounded-full mb-6">
+                    <i class="fa-solid fa-bridge text-[#9add26] text-4xl"></i>
+                </div>
+                <h1 class="text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">버려지는 공강시간,<br><span
+                        class="text-transparent bg-clip-text bg-gradient-to-r from-[#9add26] to-green-500">춘천의
+                        아이들</span>을 위해 쓰세요</h1>
+                <p class="text-lg text-slate-500 mb-10 font-medium">대학생의 빈 시간표와 늘봄학교의 강사 수요를 AI가 최적의 동선으로 연결합니다. 내가 원하는
+                    방식으로 계약하고 활동을 시작해 보세요.</p>
+
+                <!-- 프로세스 카드 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 text-left">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div
+                            class="w-10 h-10 rounded-full bg-brand/30 flex items-center justify-center text-slate-800 font-bold mb-4">
+                            1</div>
+                        <h3 class="text-lg font-bold text-slate-900 mb-2">시간표 업로드</h3>
+                        <p class="text-sm text-slate-500">에브리타임 시간표 이미지만 올리면 AI가 빈 공강 시간을 자동 추출합니다.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div
+                            class="w-10 h-10 rounded-full bg-brand/30 flex items-center justify-center text-slate-800 font-bold mb-4">
+                            2</div>
+                        <h3 class="text-lg font-bold text-slate-900 mb-2">활동 유형 선택</h3>
+                        <p class="text-sm text-slate-500">한 달간 꾸준히 할지(월별 계약), 오늘 하루만 할지(일일 건별) 자유롭게 선택하세요.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div
+                            class="w-10 h-10 rounded-full bg-brand/30 flex items-center justify-center text-slate-800 font-bold mb-4">
+                            3</div>
+                        <h3 class="text-lg font-bold text-slate-900 mb-2">AI 맞춤 배정</h3>
+                        <p class="text-sm text-slate-500">내 학교 반경, 이동 시간, 전공을 고려해 가장 적합한 늘봄학교를 매칭해 드립니다.</p>
+                    </div>
+                </div>
+
+                <button onclick="navigate('upload')"
+                    class="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-lg transition-colors shadow-lg shadow-slate-900/20">
+                    지금 시간표 등록하고 시작하기 <i class="fa-solid fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 뷰 2: 시간표 등록 및 설정 화면 -->
+        <div id="view-upload" class="page-view hidden flex-1 overflow-y-auto p-10">
+            <div class="max-w-4xl mx-auto">
+                <div class="mb-8 border-b border-slate-200 pb-6">
+                    <h2 class="text-3xl font-extrabold text-slate-900">공강 시간표 등록 및 활동 설정</h2>
+                    <p class="text-slate-500 mt-2 font-medium">활동 가능한 요일과 선호하는 매칭 방식을 선택해 주세요.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <!-- 왼쪽: 시간표 업로드 영역 -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center"><i
+                                class="fa-solid fa-image mr-2 text-brand-dark"></i> 개인 시간표 연동</h3>
+
+                        <div class="upload-zone border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-white cursor-pointer transition-colors mb-4"
+                            onclick="document.getElementById('file-input').click()">
+                            <i class="fa-solid fa-cloud-arrow-up text-5xl text-slate-300 mb-4"></i>
+                            <h4 class="text-slate-800 font-bold text-lg mb-1">시간표 이미지 업로드</h4>
+                            <p class="text-sm text-slate-500">에브리타임 캡처 화면을 드래그하거나 클릭하세요.</p>
+                            <input type="file" id="file-input" class="hidden" accept="image/*"
+                                onchange="showUploadSuccess()">
+                        </div>
+
+                        <!-- 업로드 성공 메시지 (초기 숨김) -->
+                        <div id="upload-success"
+                            class="hidden bg-[#ADFF2F]/20 border border-[#9add26] rounded-xl p-4 flex items-start gap-3">
+                            <i class="fa-solid fa-circle-check text-[#9add26] text-xl mt-0.5"></i>
+                            <div>
+                                <p class="text-slate-900 font-bold text-sm">시간표 분석 완료!</p>
+                                <p class="text-slate-600 text-xs mt-1">월/수 13:00~17:00, 금 09:00~18:00 공강 확인됨.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 오른쪽: 활동 설정 영역 -->
+                    <div class="space-y-8">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center"><i
+                                    class="fa-solid fa-handshake mr-2 text-brand-dark"></i> 계약/매칭 방식 선택</h3>
+
+                            <div class="grid grid-cols-1 gap-4">
+                                <!-- 라디오 버튼 형식의 커스텀 UI -->
+                                <label
+                                    class="relative flex cursor-pointer rounded-xl border bg-white p-5 shadow-sm focus:outline-none border-[#9add26] ring-1 ring-[#9add26] bg-brand/5"
+                                    id="label-monthly">
+                                    <input type="radio" name="contract_type" value="monthly" class="sr-only" checked
+                                        onchange="toggleContract('monthly')">
+                                    <span class="flex flex-1">
+                                        <span class="flex flex-col">
+                                            <span class="block text-sm font-bold text-slate-900 mb-1">월별 정기 계약
+                                                (추천)</span>
+                                            <span class="block text-sm text-slate-500 font-medium">한 학기 또는 월 단위로 정해진 요일에
+                                                고정적으로 출강합니다. 안정적인 활동과 높은 시급이 보장됩니다.</span>
+                                        </span>
+                                    </span>
+                                    <i class="fa-solid fa-circle-check text-[#9add26] text-xl ml-4"
+                                        id="check-monthly"></i>
+                                </label>
+
+                                <label
+                                    class="relative flex cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-sm focus:outline-none hover:bg-slate-50 transition-colors"
+                                    id="label-daily">
+                                    <input type="radio" name="contract_type" value="daily" class="sr-only"
+                                        onchange="toggleContract('daily')">
+                                    <span class="flex flex-1">
+                                        <span class="flex flex-col">
+                                            <span class="block text-sm font-bold text-slate-900 mb-1">일일 건별 매칭
+                                                (자유형)</span>
+                                            <span class="block text-sm text-slate-500 font-medium">긴급 수요가 발생했을 때 당일 하루만
+                                                수락하여 파견을 나갑니다. 스케줄이 유동적인 학생에게 적합합니다.</span>
+                                        </span>
+                                    </span>
+                                    <i class="fa-solid fa-circle-check text-slate-200 text-xl ml-4"
+                                        id="check-daily"></i>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center"><i
+                                    class="fa-solid fa-tags mr-2 text-brand-dark"></i> 희망 지도 분야 (다중 선택)</h3>
+                            <div class="flex flex-wrap gap-2" id="teaching-fields">
+                                <span onclick="toggleField(this)"
+                                    class="field-option px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer hover:border-brand-dark hover:bg-brand/10 transition-colors">예체능
+                                    (미술/음악)</span>
+                                <span onclick="toggleField(this)"
+                                    class="field-option px-4 py-2 rounded-full border border-brand-dark bg-brand text-slate-900 text-sm font-bold cursor-pointer shadow-sm">IT
+                                    / 기초 코딩</span>
+                                <span onclick="toggleField(this)"
+                                    class="field-option px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer hover:border-brand-dark hover:bg-brand/10 transition-colors">독서
+                                    / 논술</span>
+                                <span onclick="toggleField(this)"
+                                    class="field-option px-4 py-2 rounded-full border border-brand-dark bg-brand text-slate-900 text-sm font-bold cursor-pointer shadow-sm">기본
+                                    교과 보조</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-200 flex justify-end gap-3">
+                            <button
+                                class="px-6 py-3 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">임시저장</button>
+                            <button onclick="submitProfile()"
+                                class="px-6 py-3 rounded-xl font-bold text-slate-900 bg-brand hover:bg-brand-dark transition-colors shadow-sm">설정
+                                완료 및 대시보드 이동</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 뷰 3: 실시간 매칭 대시보드 (기존 관제 화면) -->
+        <div id="view-dashboard" class="page-view hidden flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            <!-- 상단 헤더 -->
+            <header
+                class="h-20 px-8 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-slate-200 z-10 shrink-0">
+                <div>
+                    <h2 class="text-xl text-slate-900 font-extrabold">실시간 매칭 대시보드</h2>
+                    <p class="text-sm text-slate-500 flex items-center gap-2 mt-1 font-medium">
+                        <span class="w-2 h-2 rounded-full bg-[#9add26] pulse-dot"></span>
+                        데이터 동기화 중: <span id="current-time" class="text-slate-700 font-bold"></span>
+                    </p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button
+                        class="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold border border-slate-200 shadow-sm transition-colors">
+                        <i class="fa-solid fa-download mr-2"></i> 리포트 다운로드
+                    </button>
+                </div>
+            </header>
+
+            <!-- 대시보드 본문 -->
+            <div class="flex-1 overflow-y-auto p-8">
+                <!-- KPI 카드 섹션 -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <!-- 카드 1 -->
+                    <div
+                        class="bg-white shadow-sm rounded-xl p-6 border-l-4 border-l-rose-500 border-y border-r border-slate-100 relative overflow-hidden">
+                        <div class="absolute -right-2 -top-2 text-rose-500/10 text-6xl"><i
+                                class="fa-solid fa-triangle-exclamation"></i></div>
+                        <h3 class="text-slate-500 text-sm font-bold mb-1">금일 긴급 공백 (미매칭)</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-extrabold text-slate-900" id="urgent-count">12</span>
+                            <span class="text-sm font-medium text-slate-500">건</span>
+                        </div>
+                    </div>
+                    <!-- 카드 2 -->
+                    <div
+                        class="bg-white shadow-sm rounded-xl p-6 border-l-4 border-l-[#9add26] border-y border-r border-slate-100 relative overflow-hidden">
+                        <div class="absolute -right-2 -top-2 text-brand/30 text-6xl"><i
+                                class="fa-solid fa-handshake"></i></div>
+                        <h3 class="text-slate-500 text-sm font-bold mb-1">당일 매칭 완료</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-extrabold text-slate-900" id="matched-count">45</span>
+                            <span class="text-sm font-medium text-slate-500">건</span>
+                        </div>
+                    </div>
+                    <!-- 카드 3 -->
+                    <div
+                        class="bg-white shadow-sm rounded-xl p-6 border-l-4 border-l-blue-400 border-y border-r border-slate-100 relative overflow-hidden">
+                        <div class="absolute -right-2 -top-2 text-blue-400/10 text-6xl"><i
+                                class="fa-solid fa-user-clock"></i></div>
+                        <h3 class="text-slate-500 text-sm font-bold mb-1">대기중인 공강 대학생</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-extrabold text-slate-900">128</span>
+                            <span class="text-sm font-medium text-slate-500">명</span>
+                        </div>
+                    </div>
+                    <!-- 카드 4 -->
+                    <div
+                        class="bg-white shadow-sm rounded-xl p-6 border-l-4 border-l-purple-400 border-y border-r border-slate-100 relative overflow-hidden">
+                        <div class="absolute -right-2 -top-2 text-purple-400/10 text-6xl"><i
+                                class="fa-solid fa-bus"></i></div>
+                        <h3 class="text-slate-500 text-sm font-bold mb-1">평균 도달 시간</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-extrabold text-slate-900">14.2</span>
+                            <span class="text-sm font-medium text-slate-500">분</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 메인 그리드 (수요 리스트 + 지도) -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[550px]">
+
+                    <!-- 왼쪽: 긴급 수요 매칭 리스트 -->
+                    <div class="bg-white shadow-sm rounded-xl border border-slate-200 flex flex-col overflow-hidden">
+                        <div
+                            class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                            <h3 class="text-slate-900 font-bold text-lg">실시간 늘봄 긴급 수요</h3>
+                            <span class="px-3 py-1 bg-brand text-slate-800 text-xs rounded-full font-bold shadow-sm">AI
+                                추천 적용됨</span>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto p-5 space-y-4 bg-white" id="request-list">
+                            <!-- Dynamic cards will be rendered here -->
+
+                        </div>
+                    </div>
+
+                    <!-- 오른쪽: 관제 맵 영역 -->
+                    <div
+                        class="lg:col-span-2 bg-white shadow-sm rounded-xl border border-slate-200 relative overflow-hidden flex flex-col">
+                        <div
+                            class="p-5 border-b border-slate-100 bg-white/90 backdrop-blur absolute top-0 w-full z-10 flex justify-between items-center shadow-sm">
+                            <h3 class="text-slate-900 font-bold text-lg"><i
+                                    class="fa-solid fa-map-location-dot mr-2 text-[#9add26]"></i> 동선 최적화 맵 (Live)</h3>
+                            <div class="flex gap-2 text-xs font-bold">
+                                <span class="px-2 py-1 bg-slate-50 rounded text-slate-600 border border-slate-200"><span
+                                        class="text-rose-500 mr-1">●</span>초등학교</span>
+                                <span class="px-2 py-1 bg-slate-50 rounded text-slate-600 border border-slate-200"><span
+                                        class="text-blue-500 mr-1">●</span>대학교</span>
+                            </div>
+                        </div>
+
+                        <!-- 실제 TMAP 렌더링 영역 -->
+                        <div class="flex-1 relative mt-14">
+                            <div id="tmap-container" class="absolute inset-0 z-0"></div>
+
+                            <!-- 매칭 성공 모달 오버레이 -->
+                            <div id="success-modal"
+                                class="absolute inset-0 bg-white/90 z-30 hidden flex-col items-center justify-center backdrop-blur-md">
+                                <div
+                                    class="w-24 h-24 rounded-full bg-brand/20 flex items-center justify-center mb-5 border-4 border-brand">
+                                    <i class="fa-solid fa-check text-6xl text-[#85cc16]"></i>
+                                </div>
+                                <h2 class="text-3xl font-extrabold text-slate-900 mb-3">매칭이 완료되었습니다!</h2>
+                                <p class="text-slate-600 text-center mb-8 font-medium text-lg leading-relaxed">AI가 최적의
+                                    동선(도보 10분)을 안내합니다.<br>학생에게 즉시 카카오톡 알림이 발송되었습니다.</p>
+                                <div class="flex gap-4">
+                                    <span
+                                        class="px-5 py-2.5 bg-slate-50 text-slate-800 rounded-lg border border-slate-200 font-bold shadow-sm">소요
+                                        시간: 10분</span>
+                                    <span
+                                        class="px-5 py-2.5 bg-brand text-slate-900 rounded-lg border border-[#9add26] font-bold shadow-sm">매칭
+                                        정확도: 98%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 뷰 4: 늘봄 긴급 수요 등록 화면 (선생님 전용) -->
+        <div id="view-demand-register" class="page-view hidden flex-1 overflow-y-auto p-10">
+            <div class="max-w-3xl mx-auto">
+                <div class="mb-8 border-b border-slate-200 pb-6">
+                    <h2 class="text-3xl font-extrabold text-slate-900">늘봄 긴급 수요 (카드) 등록</h2>
+                    <p class="text-slate-500 mt-2 font-medium">학교에 필요한 늘봄 강사 긴급 수요를 등록해주세요.</p>
+                </div>
+                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                    <form onsubmit="submitDemandRequest(event)" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">계약 방식</label>
+                            <select id="demand-contract" class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all appearance-none" required>
+                                <option value="daily">일일 건별 매칭 (긴급)</option>
+                                <option value="monthly">월별 정기 계약</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">지도 분야 (다중 선택 가능)</label>
+                            <div class="flex flex-wrap gap-2" id="demand-teaching-fields">
+                                <span onclick="toggleField(this)" class="demand-field-option px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer hover:border-brand-dark hover:bg-brand/10 transition-colors">예체능 (미술/음악)</span>
+                                <span onclick="toggleField(this)" class="demand-field-option px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer hover:border-brand-dark hover:bg-brand/10 transition-colors">IT / 기초 코딩</span>
+                                <span onclick="toggleField(this)" class="demand-field-option px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer hover:border-brand-dark hover:bg-brand/10 transition-colors">독서 / 논술</span>
+                                <span onclick="toggleField(this)" class="demand-field-option px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 cursor-pointer hover:border-brand-dark hover:bg-brand/10 transition-colors">기본 교과 보조</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-bold text-slate-700">필요한 요일 및 시간</label>
+                                <button type="button" onclick="addTimeSlot()" class="text-xs font-bold text-brand hover:text-brand-dark px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-sm"><i class="fa-solid fa-plus"></i> 시간 추가</button>
+                            </div>
+                            <div id="time-slots-container" class="space-y-3">
+                                <div class="time-slot grid grid-cols-[1fr_1fr_1fr_auto] gap-3 items-center">
+                                    <select class="slot-day bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all appearance-none" required>
+                                        <option value="월">월요일</option>
+                                        <option value="화">화요일</option>
+                                        <option value="수">수요일</option>
+                                        <option value="목">목요일</option>
+                                        <option value="금">금요일</option>
+                                    </select>
+                                    <input type="time" class="slot-start bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all" required>
+                                    <input type="time" class="slot-end bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all" required>
+                                    <button type="button" onclick="removeTimeSlot(this)" class="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors border border-rose-100"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full py-4 bg-brand hover:bg-brand-dark text-slate-900 rounded-xl font-bold text-lg transition-colors shadow-sm mt-4">
+                            긴급 수요 등록하기
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 로그인 모달 -->
+        <div id="login-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+            <!-- 배경 오버레이 (Glassmorphism) -->
+            <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity opacity-0 duration-300"
+                id="login-overlay" onclick="closeLoginModal()"></div>
+
+            <!-- 모달 컨텐츠 -->
+            <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 transform scale-95 opacity-0 transition-all duration-300"
+                id="login-content">
+                <!-- 닫기 버튼 -->
+                <button onclick="closeLoginModal()"
+                    class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-brand/20 rounded-full mb-4">
+                        <i class="fa-solid fa-bridge text-[#9add26] text-3xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-extrabold text-slate-900 mb-2">다시 만나서 반가워요!</h2>
+                    <p class="text-sm text-slate-500 font-medium">에듀-브릿지 서비스 이용을 위해 로그인해주세요.</p>
+                </div>
+
+                <form onsubmit="event.preventDefault(); handleLogin();" class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">이메일</label>
+                        <div class="relative">
+                            <i
+                                class="fa-regular fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="email" id="login-email" placeholder="admin@bridge.com"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">비밀번호</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="password" id="login-password" placeholder="••••••••"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-sm">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox"
+                                class="w-4 h-4 accent-[#9add26] bg-slate-100 border-slate-300 rounded focus:ring-[#9add26] focus:ring-2">
+                            <span class="ml-2 font-medium text-slate-600">자동 로그인</span>
+                        </label>
+                        <a href="#" class="font-bold text-slate-600 hover:text-[#9add26] transition-colors">비밀번호 찾기</a>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-lg transition-colors shadow-lg shadow-slate-900/20 mt-2">
+                        로그인
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-6 border-t border-slate-100 text-center">
+                    <p class="text-sm font-medium text-slate-500 mb-3">아직 계정이 없으신가요? <a href="#" onclick="closeLoginModal(); setTimeout(openSignupModal, 300); return false;"
+                            class="font-bold text-slate-900 hover:text-[#9add26] transition-colors">회원가입</a></p>
+
+                    <!-- 데모용 테스트 계정 안내 -->
+                    <div
+                        class="flex flex-col gap-1.5 text-xs text-slate-500 text-left bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p class="font-bold text-slate-700 mb-1"><i class="fa-solid fa-circle-info mr-1"></i> 테스트용 계정</p>
+                        <p><span class="font-bold text-slate-700">계정:</span> admin@bridge.com / admin1234</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 회원가입 모달 -->
+        <div id="signup-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+            <!-- 배경 오버레이 -->
+            <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity opacity-0 duration-300"
+                id="signup-overlay" onclick="closeSignupModal()"></div>
+
+            <!-- 모달 컨텐츠 -->
+            <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 transform scale-95 opacity-0 transition-all duration-300"
+                id="signup-content">
+                <!-- 닫기 버튼 -->
+                <button onclick="closeSignupModal()"
+                    class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-brand/20 rounded-full mb-4">
+                        <i class="fa-solid fa-user-plus text-[#9add26] text-3xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-extrabold text-slate-900 mb-2">회원가입</h2>
+                    <p class="text-sm text-slate-500 font-medium">에듀-브릿지와 함께 아이들의 내일을 만들어주세요!</p>
+                </div>
+
+                <form onsubmit="event.preventDefault(); handleSignup();" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">이메일</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="email" id="signup-email" required placeholder="example@knu.ac.kr"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">비밀번호</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="password" id="signup-password" required placeholder="••••••••"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">이름</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="signup-name" required placeholder="홍길동"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">학교(소속)</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-school absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="signup-school" required placeholder="강원대학교"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">사용자 유형</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-users absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <select id="signup-usertype" required
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all appearance-none cursor-pointer">
+                                <option value="학부생" selected>학부생</option>
+                                <option value="선생님">선생님</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-lg transition-colors shadow-lg shadow-slate-900/20 mt-2">
+                        계정 만들기
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-6 border-t border-slate-100 text-center">
+                    <p class="text-sm font-medium text-slate-500">이미 계정이 있으신가요? <a href="#" onclick="closeSignupModal(); setTimeout(openLoginModal, 300); return false;"
+                            class="font-bold text-slate-900 hover:text-[#9add26] transition-colors">로그인</a></p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // 현재 시간 실시간 업데이트
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('current-time').textContent = timeString;
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // SPA 라우팅 로직 (뷰 전환)
+        function navigate(viewId) {
+            // 모든 뷰 숨기기
+            document.querySelectorAll('.page-view').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('flex', 'flex-col', 'block');
+            });
+
+            // 타겟 뷰 보이기
+            if (viewId === 'dashboard') {
+                const currentUser = AuthManager.getCurrentUser();
+                if (!currentUser) {
+                    alert('실시간 관제 센터는 로그인이 필요합니다.');
+                    return;
+                }
+                
+                if (currentUser.userType !== '선생님') {
+                    if (!currentUser.freeTimes || currentUser.freeTimes.length === 0 || !currentUser.contractType || !currentUser.teachingFields || currentUser.teachingFields.length === 0) {
+                        alert('실시간 관제 센터를 이용하려면 공강 시간, 계약 매칭 및 희망 지도 분야가 설정되어 있어야 합니다.');
+                        return;
+                    }
+                }
+            }
+
+            const target = document.getElementById(`view-${viewId}`);
+            if (viewId === 'dashboard' || viewId === 'home') {
+                target.classList.remove('hidden');
+                target.classList.add('flex', 'flex-col');
+                // 대시보드 뷰가 화면에 표시된 후 지도 및 목록 새로고침
+                if (viewId === 'dashboard') {
+                    if (typeof renderMap === 'function') {
+                        setTimeout(renderMap, 50);
+                    }
+                    if (typeof fetchAndRenderNeulbomRequests === 'function') {
+                        fetchAndRenderNeulbomRequests();
+                    }
+                }
+            } else {
+                target.classList.remove('hidden');
+                target.classList.add('block');
+            }
+
+            // 사이드바 상태 업데이트
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('bg-brand/20', 'border-brand/40', 'font-bold', 'text-slate-900');
+                el.classList.add('text-slate-500', 'font-medium', 'border-transparent');
+            });
+            const activeNav = document.getElementById(`nav-${viewId}`);
+            if (activeNav) {
+                activeNav.classList.remove('text-slate-500', 'font-medium', 'border-transparent');
+                activeNav.classList.add('bg-brand/20', 'border-brand/40', 'font-bold', 'text-slate-900');
+            }
+        }
+
+        // 업로드 뷰 UI 제어 스크립트
+        async function showUploadSuccess() {
+            const fileInput = document.getElementById('file-input');
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const successDiv = document.getElementById('upload-success');
+                successDiv.classList.remove('hidden');
+
+                // 모듈화된 AuthManager 로직 호출
+                const freeTimes = await AuthManager.processScheduleImage(file);
+                const msgEl = successDiv.querySelector('p.text-slate-600');
+                const titleEl = successDiv.querySelector('p.text-slate-900.font-bold');
+                
+                if (freeTimes && freeTimes.length > 0) {
+                    const timeText = freeTimes.map(t => `${t.day} ${formatMinutesToTime(t.startTime)}~${formatMinutesToTime(t.endTime)}`).join(', ');
+                    if (titleEl) titleEl.textContent = '시간표 분석 완료!';
+                    if (msgEl) msgEl.textContent = `${timeText} 공강 확인됨.`;
+                } else {
+                    if (titleEl) titleEl.textContent = '분석 실패';
+                    if (msgEl) msgEl.textContent = '해당 이미지 파일명과 일치하는 공강 시간 데이터가 없습니다.';
+                }
+            }
+        }
+
+        function toggleContract(type) {
+            const lblMonthly = document.getElementById('label-monthly');
+            const chkMonthly = document.getElementById('check-monthly');
+            const lblDaily = document.getElementById('label-daily');
+            const chkDaily = document.getElementById('check-daily');
+
+            if (type === 'monthly') {
+                lblMonthly.className = "relative flex cursor-pointer rounded-xl border bg-white p-5 shadow-sm focus:outline-none border-[#9add26] ring-1 ring-[#9add26] bg-brand/5";
+                chkMonthly.className = "fa-solid fa-circle-check text-[#9add26] text-xl ml-4";
+
+                lblDaily.className = "relative flex cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-sm focus:outline-none hover:bg-slate-50 transition-colors";
+                chkDaily.className = "fa-solid fa-circle-check text-slate-200 text-xl ml-4";
+            } else {
+                lblDaily.className = "relative flex cursor-pointer rounded-xl border bg-white p-5 shadow-sm focus:outline-none border-[#9add26] ring-1 ring-[#9add26] bg-brand/5";
+                chkDaily.className = "fa-solid fa-circle-check text-[#9add26] text-xl ml-4";
+
+                lblMonthly.className = "relative flex cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-sm focus:outline-none hover:bg-slate-50 transition-colors";
+                chkMonthly.className = "fa-solid fa-circle-check text-slate-200 text-xl ml-4";
+            }
+        }
+
+        function toggleField(el) {
+            el.classList.toggle('bg-brand');
+            el.classList.toggle('border-brand-dark');
+            el.classList.toggle('text-slate-900');
+            el.classList.toggle('font-bold');
+            el.classList.toggle('shadow-sm');
+            
+            el.classList.toggle('bg-white');
+            el.classList.toggle('border-slate-200');
+            el.classList.toggle('text-slate-600');
+            el.classList.toggle('font-medium');
+        }
+
+        function submitProfile() {
+            const currentUser = AuthManager.getCurrentUser();
+            if (!currentUser) {
+                alert("로그인이 필요한 기능입니다.");
+                openLoginModal();
+                return;
+            }
+
+            // 계약/매칭 방식 확인
+            const contractTypeInput = document.querySelector('input[name="contract_type"]:checked');
+            const contractType = contractTypeInput ? contractTypeInput.value : 'monthly';
+
+            // 희망 지도 분야 확인
+            const fields = [];
+            document.querySelectorAll('.field-option.bg-brand').forEach(el => {
+                fields.push(el.innerText.trim());
+            });
+
+            // AuthManager 업데이트
+            AuthManager.updateUser(currentUser.email, {
+                contractType: contractType,
+                teachingFields: fields
+            });
+
+            // 버튼 액션 시뮬레이션 후 대시보드로 이동
+            alert("설정이 성공적으로 저장되었습니다. 매칭 대시보드로 이동합니다."); // 실제 서비스에선 alert 대신 커스텀 토스트 메시지 권장
+            navigate('dashboard');
+        }
+
+        // 대시보드 매칭 시뮬레이션 로직
+        function simulateMatch(cardId) {
+            const card = document.getElementById(cardId);
+            const button = card.querySelector('button');
+
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 분석중...';
+            button.classList.remove('bg-brand', 'hover:bg-[#9add26]', 'text-slate-900');
+            button.classList.add('bg-slate-200', 'text-slate-500', 'cursor-not-allowed');
+
+            // document.getElementById('routing-line').style.display = 'block';
+
+            setTimeout(() => {
+                const modal = document.getElementById('success-modal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+
+                let urgent = parseInt(document.getElementById('urgent-count').innerText);
+                let matched = parseInt(document.getElementById('matched-count').innerText);
+                document.getElementById('urgent-count').innerText = urgent - 1;
+                document.getElementById('matched-count').innerText = matched + 1;
+
+                setTimeout(() => {
+                    modal.classList.remove('flex');
+                    modal.classList.add('hidden');
+                    // document.getElementById('routing-line').style.display = 'none';
+
+                    card.style.transition = "all 0.5s ease";
+                    card.style.opacity = "0";
+                    card.style.transform = "translateX(-20px)";
+                    setTimeout(() => {
+                        card.remove();
+                        const list = document.getElementById('request-list');
+                        if (list.children.length === 0) {
+                            list.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400">
+                                <i class="fa-regular fa-face-smile text-5xl mb-4 text-[#9add26]/60"></i>
+                                <p class="font-bold text-lg text-slate-500">현재 대기중인 매칭 수요가 없습니다.</p>
+                            </div>`;
+                        }
+                    }, 500);
+                }, 2500);
+            }, 1500);
+        }
+
+        // 라우팅 선 애니메이션 CSS 주입
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .routing-anim { stroke-dashoffset: 1000; stroke-dasharray: 10 10; animation: dash 20s linear infinite; }
+            @keyframes dash { to { stroke-dashoffset: 0; } }
+        `;
+        document.head.appendChild(style);
+
+        // 늘봄 수요 등록 폼에서 시간 슬롯 추가/삭제
+        function addTimeSlot() {
+            const container = document.getElementById('time-slots-container');
+            const slotHTML = `
+                <div class="time-slot grid grid-cols-[1fr_1fr_1fr_auto] gap-3 items-center mt-3">
+                    <select class="slot-day bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all appearance-none" required>
+                        <option value="월">월요일</option>
+                        <option value="화">화요일</option>
+                        <option value="수">수요일</option>
+                        <option value="목">목요일</option>
+                        <option value="금">금요일</option>
+                    </select>
+                    <input type="time" class="slot-start bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all" required>
+                    <input type="time" class="slot-end bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-medium focus:outline-none focus:border-[#9add26] focus:ring-2 focus:ring-[#9add26]/20 transition-all" required>
+                    <button type="button" onclick="removeTimeSlot(this)" class="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors border border-rose-100"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', slotHTML);
+        }
+
+        function removeTimeSlot(button) {
+            const container = document.getElementById('time-slots-container');
+            if (container.children.length > 1) {
+                button.closest('.time-slot').remove();
+            } else {
+                alert('최소 1개의 요일/시간은 입력해야 합니다.');
+            }
+        }
+
+        // 늘봄 수요 등록 폼 제출 핸들러
+        function submitDemandRequest(event) {
+            event.preventDefault();
+            
+            const currentUser = AuthManager.getCurrentUser();
+            if (!currentUser) {
+                alert("로그인이 필요합니다.");
+                return;
+            }
+
+            const contractType = document.getElementById('demand-contract').value;
+
+            const fields = [];
+            document.querySelectorAll('#demand-teaching-fields .bg-brand').forEach(el => {
+                fields.push(el.innerText.trim());
+            });
+
+            if (fields.length === 0) {
+                alert("지도 분야를 1개 이상 선택해주세요.");
+                return;
+            }
+
+            // HH:MM을 분(minutes)으로 변환
+            const parseTime = (timeStr) => {
+                if (!timeStr) return 0;
+                const [h, m] = timeStr.split(':').map(Number);
+                return h * 60 + m;
+            };
+
+            const times = [];
+            document.querySelectorAll('.time-slot').forEach(slot => {
+                const day = slot.querySelector('.slot-day').value;
+                const startStr = slot.querySelector('.slot-start').value;
+                const endStr = slot.querySelector('.slot-end').value;
+                if (startStr && endStr) {
+                    times.push({
+                        day: day,
+                        startTime: parseTime(startStr),
+                        endTime: parseTime(endStr)
+                    });
+                }
+            });
+
+            if (times.length === 0) {
+                alert("적어도 하나의 유효한 시간을 입력해주세요.");
+                return;
+            }
+
+            const newCard = {
+                id: `card-${Date.now()}`,
+                schoolName: currentUser.school || "춘천형 선생님 소속 초등학교",
+                contractType: contractType,
+                teachingFields: fields,
+                monthlyTimes: times, // 다중 시간 배열 매핑
+                dailyTime: contractType === 'daily' ? times[0] : null,
+                distance: null,
+                travelTime: null,
+                matchScore: "0%"
+            };
+
+            // 전역 데이터에 추가
+            if (typeof NeulbomRequestsData !== 'undefined') {
+                NeulbomRequestsData.push(newCard);
+            }
+
+            alert('수요가 성공적으로 등록되었습니다.');
+            
+            // 폼 초기화
+            event.target.reset();
+            document.querySelectorAll('#demand-teaching-fields .bg-brand').forEach(el => {
+                toggleField(el);
+            });
+            
+            // 추가된 시간 슬롯들 초기화 (1개만 남김)
+            const container = document.getElementById('time-slots-container');
+            while (container.children.length > 1) {
+                container.lastElementChild.remove();
+            }
+
+            // 대시보드로 이동하여 방금 등록한 카드 확인
+            navigate('dashboard');
+        }
+
+        // 로그인 모달 제어
+        function openLoginModal() {
+            const modal = document.getElementById('login-modal');
+            const overlay = document.getElementById('login-overlay');
+            const content = document.getElementById('login-content');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // 약간의 딜레이를 주어 CSS 트랜지션 적용
+            setTimeout(() => {
+                overlay.classList.remove('opacity-0');
+                overlay.classList.add('opacity-100');
+
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeLoginModal() {
+            const modal = document.getElementById('login-modal');
+            const overlay = document.getElementById('login-overlay');
+            const content = document.getElementById('login-content');
+
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0');
+
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function updateUserUI(user) {
+            const userInfoBtn = document.getElementById('user-info-btn');
+            const userInfoName = document.getElementById('user-name');
+            const userInfoRole = document.getElementById('user-role');
+            const userAvatar = document.getElementById('user-avatar');
+
+            if (user) {
+                userInfoName.textContent = user.name;
+                userInfoName.className = "text-sm text-[#9add26] font-bold";
+                userInfoRole.textContent = `${user.school} ${user.userType}`;
+                userInfoRole.className = "text-xs text-slate-500";
+                userAvatar.textContent = user.initial;
+                userAvatar.className = "w-8 h-8 rounded-full bg-[#9add26] text-slate-900 flex items-center justify-center font-bold transition-all shadow-sm group-hover:scale-110";
+                
+                userInfoBtn.onclick = function() {
+                    if(confirm('로그아웃 하시겠습니까?')) {
+                        AuthManager.logout();
+                        location.reload();
+                    }
+                };
+
+                // 탭 가시성 처리
+                const navUpload = document.getElementById('nav-upload');
+                const navDashboard = document.getElementById('nav-dashboard');
+                const navDemandRegister = document.getElementById('nav-demand-register');
+                
+                if (user.userType === '선생님') {
+                    if (navUpload) navUpload.style.display = 'none';
+                    if (navDashboard) navDashboard.style.display = 'none';
+                    if (navDemandRegister) navDemandRegister.style.display = 'flex';
+                } else {
+                    if (navUpload) navUpload.style.display = 'flex';
+                    if (navDashboard) navDashboard.style.display = 'flex';
+                    if (navDemandRegister) navDemandRegister.style.display = 'none';
+                }
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const currentUser = AuthManager.getCurrentUser();
+            if (currentUser) {
+                updateUserUI(currentUser);
+            }
+        });
+
+        function handleLogin() {
+            const emailInput = document.getElementById('login-email').value;
+            const passwordInput = document.getElementById('login-password').value;
+
+            // 모듈화된 AuthManager 사용
+            const user = AuthManager.login(emailInput, passwordInput);
+
+            if (user) {
+                alert(`${user.name}님, 에듀-브릿지 서비스에 오신 것을 환영합니다!`);
+                closeLoginModal();
+
+                // 세션 저장 및 UI 업데이트
+                AuthManager.setSession(user);
+                updateUserUI(user);
+                fetchAndRenderNeulbomRequests();
+
+                // 폼 초기화
+                document.getElementById('login-email').value = '';
+                document.getElementById('login-password').value = '';
+            } else {
+                alert('이메일 또는 비밀번호가 일치하지 않습니다.');
+            }
+        }
+
+        function openSignupModal() {
+            const modal = document.getElementById('signup-modal');
+            const overlay = document.getElementById('signup-overlay');
+            const content = document.getElementById('signup-content');
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            setTimeout(() => {
+                overlay.classList.remove('opacity-0');
+                overlay.classList.add('opacity-100');
+                
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeSignupModal() {
+            const modal = document.getElementById('signup-modal');
+            const overlay = document.getElementById('signup-overlay');
+            const content = document.getElementById('signup-content');
+            
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0');
+            
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function handleSignup() {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const name = document.getElementById('signup-name').value;
+            const school = document.getElementById('signup-school').value;
+            const userType = document.getElementById('signup-usertype').value;
+
+            const newUser = createUserTemplate({
+                email: email,
+                password: password,
+                name: name,
+                school: school,
+                userType: userType
+            });
+
+            // 모듈화된 AuthManager 사용
+            const success = AuthManager.registerUser(newUser);
+
+            if (success) {
+                alert('회원가입이 완료되었습니다! 가입하신 정보로 로그인해 주세요.');
+                
+                // 폼 초기화
+                document.getElementById('signup-email').value = '';
+                document.getElementById('signup-password').value = '';
+                document.getElementById('signup-name').value = '';
+                document.getElementById('signup-school').value = '';
+
+                closeSignupModal();
+                setTimeout(openLoginModal, 300);
+            } else {
+                alert('이미 가입된 이메일입니다. 다른 이메일을 사용해 주세요.');
+            }
+        }
+    </script>
+    <script>
+        let mapRendered = false;
+        let globalMap = null;
+        function renderMap() {
+            if (!mapRendered) {
+                mapRendered = true;
+                globalMap = TMapManager.render('tmap-container');
+            }
+        }
+
+        // 늘봄 긴급 수요 리스트 동적 렌더링
+        async function fetchAndRenderNeulbomRequests() {
+            try {
+                let data = JSON.parse(JSON.stringify(NeulbomRequestsData)); // 원본 데이터 복사
+                const currentUser = AuthManager.getCurrentUser();
+                
+                if (currentUser) {
+                    // 실제 TMAP 거리 계산을 비동기 병렬로 처리 (TMapCacheManager 적용)
+                    await Promise.all(data.map(async (item) => {
+                        const cached = TMapCacheManager.getCache(currentUser.school, item.schoolName);
+                        if (cached) {
+                            item.distance = cached.distance;
+                            item.travelTime = cached.travelTime;
+                        } else {
+                            const routeResult = await TMapManager.calculateRealDistance(currentUser.school, item.schoolName);
+                            if (routeResult) {
+                                item.distance = routeResult.distance;
+                                item.travelTime = routeResult.travelTime;
+                                TMapCacheManager.setCache(currentUser.school, item.schoolName, routeResult.distance, routeResult.travelTime);
+                            }
+                        }
+                        // 적합도 매니저를 통해 계산 후 표시
+                        const score = MatchManager.calculateMatchScore(item, currentUser);
+                        item.matchScore = score + "%";
+                        item._rawScore = score;
+                    }));
+                    
+                    // 적합도가 높은 순서로 정렬
+                    data.sort((a, b) => (b._rawScore || 0) - (a._rawScore || 0));
+                } else {
+                    data.forEach(item => item.matchScore = "?%");
+                }
+
+                const list = document.getElementById('request-list');
+                list.innerHTML = ''; // 기존 내용 초기화
+                if (data.length === 0) {
+                    list.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400">
+                        <i class="fa-regular fa-face-smile text-5xl mb-4 text-[#9add26]/60"></i>
+                        <p class="font-bold text-lg text-slate-500">현재 대기중인 매칭 수요가 없습니다.</p>
+                    </div>`;
+                    return;
+                }
+
+                // 카테고리별 디자인 색상 매핑
+                const fieldColorMap = {
+                    "예체능 (미술/음악)": "text-blue-600 bg-blue-50 border-blue-100",
+                    "IT / 기초 코딩": "text-purple-600 bg-purple-50 border-purple-100",
+                    "독서 / 논술": "text-emerald-600 bg-emerald-50 border-emerald-100",
+                    "기본 교과 보조": "text-orange-600 bg-orange-50 border-orange-200"
+                };
+
+                const contractColorMap = {
+                    "monthly": "text-slate-600 bg-slate-100 border-slate-200",
+                    "daily": "text-orange-600 bg-orange-50 border-orange-200"
+                };
+
+                const contractDisplayMap = {
+                    "monthly": "월별 계약",
+                    "daily": "일일 매칭(긴급)"
+                };
+
+                data.forEach(item => {
+                    const contractClasses = contractColorMap[item.contractType] || "text-slate-600 bg-slate-100 border-slate-200";
+
+                    let fieldBadges = '';
+                    if (item.teachingFields) {
+                        fieldBadges = item.teachingFields.map(f => {
+                            const fieldClasses = fieldColorMap[f] || "text-slate-600 bg-slate-100 border-slate-200";
+                            return `<span class="text-xs font-bold px-2 py-1 rounded border ${fieldClasses}">${f}</span>`;
+                        }).join('');
+                    }
+
+                    let timeDisplayString = "";
+                    if (item.contractType === "monthly" && item.monthlyTimes && item.monthlyTimes.length > 0) {
+                        const days = item.monthlyTimes.map(t => t.day).join(",");
+                        const startTime = formatMinutesToTime(item.monthlyTimes[0].startTime);
+                        const endTime = formatMinutesToTime(item.monthlyTimes[0].endTime);
+                        timeDisplayString = `매주 ${days} ${startTime}~${endTime}`;
+                    } else if (item.contractType === "daily" && item.dailyTime) {
+                        const todayDay = ["일", "월", "화", "수", "목", "금", "토"][new Date().getDay()];
+                        if (item.dailyTime.day === todayDay) {
+                            timeDisplayString = `금일 ${formatMinutesToTime(item.dailyTime.startTime)}~${formatMinutesToTime(item.dailyTime.endTime)}`;
+                        } else {
+                            timeDisplayString = `${item.dailyTime.day}요일 ${formatMinutesToTime(item.dailyTime.startTime)}~${formatMinutesToTime(item.dailyTime.endTime)}`;
+                        }
+                    }
+
+                    let distanceDisplayString = "로그인 후 거리 확인 가능";
+                    if (currentUser && typeof item.distance === 'number') {
+                        const shortStart = currentUser.school.replace(/대학교|대학/, '대');
+                        distanceDisplayString = `${shortStart} 반경 ${item.distance}km (도보 ${item.travelTime}분)`;
+                    } else if (currentUser) {
+                        distanceDisplayString = "거리 계산 실패";
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-[#9add26] hover:shadow-md transition-all request-card cursor-pointer";
+                    card.id = item.id;
+                    card.onclick = (e) => {
+                        if (e.target.closest('button')) return; // 매칭 버튼 클릭 무시
+                        
+                        const currentUser = AuthManager.getCurrentUser();
+                        if (!currentUser) {
+                            alert("경로를 확인하려면 먼저 로그인해주세요.");
+                            openLoginModal();
+                            return;
+                        }
+                        
+                        if (globalMap) {
+                            TMapManager.drawRouteBetweenSchools(globalMap, currentUser.school, item.schoolName)
+                                .catch(e => {
+                                    alert("학교 위치를 찾거나 경로를 탐색하는 데 문제가 발생했습니다.");
+                                });
+                        }
+                    };
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex flex-col gap-1">
+                                <div class="flex gap-2 flex-wrap">
+                                    ${fieldBadges}
+                                    <span class="text-xs font-bold px-2 py-1 rounded border ${contractClasses}">${contractDisplayMap[item.contractType] || item.contractType}</span>
+                                </div>
+                                <h4 class="text-slate-900 font-bold mt-1 text-lg">${item.schoolName}</h4>
+                            </div>
+                            <span class="text-rose-500 text-xs font-bold flex items-center gap-1 bg-rose-50 px-2 py-1 rounded border border-rose-100">
+                                <i class="fa-regular fa-clock"></i> ${timeDisplayString}
+                            </span>
+                        </div>
+                        <p class="text-sm text-slate-500 mb-4 font-medium"><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i> ${distanceDisplayString}</p>
+
+                        <div class="bg-slate-50 p-4 rounded-lg flex justify-between items-center border border-slate-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-full bg-brand text-slate-800 flex items-center justify-center font-bold text-sm shadow-sm">${currentUser ? currentUser.initial : ''}</div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">${currentUser ? `${currentUser.name} (${currentUser.school})` : ''}</p>
+                                    <p class="text-xs font-medium text-slate-500 mt-0.5">
+                                        <span class="text-[#9add26] font-bold">적합도 ${item.matchScore || '0%'}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="simulateMatch('${item.id}')" class="px-4 py-2 bg-brand hover:bg-[#9add26] text-slate-900 rounded-lg font-bold text-sm transition-colors shadow-sm shrink-0">매칭</button>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error fetching neulbom requests:', error);
+                const list = document.getElementById('request-list');
+                list.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400">
+                    <i class="fa-solid fa-triangle-exclamation text-5xl mb-4 text-rose-400/60"></i>
+                    <p class="font-bold text-lg text-slate-500">데이터를 불러오는데 실패했습니다.</p>
+                </div>`;
+            }
+        }
+        document.addEventListener('DOMContentLoaded', fetchAndRenderNeulbomRequests);
+    </script>
+</body>
+
+</html>
